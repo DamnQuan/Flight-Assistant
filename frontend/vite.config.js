@@ -6,8 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api_web': 'http://localhost:5000',
-      '/api/v1': 'http://localhost:5000'
+      '/api_web': 'http://backend:5000',
+      '/api/v1': 'http://backend:5000'
     }
   },
   build: {

@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 backend/data/airports.json
 backend/data/country_translations.csv
+backend/data/.etags.json
 frontend/node_modules/
-static/
+frontend/dist/
 backend/venv/

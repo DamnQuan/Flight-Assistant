@@ -390,6 +390,7 @@ class ICAOTranslator:
             return prefix_map[prefix[0]] + "（区域）"
         return None
 
+
 def main():
     print("ICAO机场代码翻译器 (基于 mwgg_airports 数据库，支持时区偏移)")
     print("-" * 60)

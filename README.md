@@ -2,10 +2,15 @@
 
 一个基于 Flask + Vue 3 的航空信息查询工具，提供 ICAO 机场代码查询和 METAR 气象报文翻译功能。
 
-## ⚠️ **免责声明：**  
+## ⚠️ 免责声明：
 
-- 本项目**仅供虚拟飞行和业余爱好者使用**.  
+- 本项目**仅供虚拟飞行和业余爱好者使用**.
 - **切勿将此项目或其提供的任何信息用于真实飞行**
+
+## ⚠️ 警告：
+
+由于网络问题，**docker未经测试**，可能**无法正常**运行。
+推荐使用Waitress/Gunicorn作为生产服务器。 
 
 ## 功能特点
 
@@ -15,30 +20,35 @@
   - 海拔高度（英尺/米）
   - 经纬度（十进制度/度分秒格式）
   - 时区信息（含 UTC 偏移和中文时区名称）
-
 - **METAR 气象报文翻译**：
   - 支持手动输入 METAR 报文进行翻译
   - 支持通过 ICAO 代码获取实时 METAR 报文并自动翻译
   - 详细的天气信息解析（风向风速、能见度、天气现象、云层、温度露点、气压、风切变等）
   - 自动时区转换，显示当地时间
   - 报文终止符（=）自动处理与冲突检测
-
 - **截图分享**：查询结果一键生成为图片并复制到剪贴板
-
 - **历史记录**：自动保存最近查询的 ICAO 代码，点击快速回查
+- **ICAO 输入联想**：输入 ICAO 代码时自动联想机场
 
 ## 技术栈
 
-- **后端**：Python + Flask（纯 API 服务）
-- **前端**：Vue 3 + Vite
-- **API 文档**：Flasgger (Swagger UI)
-- **截图**：html2canvas (v1.4.1)
-- **生产服务器**：Windows 用 Waitress / Linux 用 Gunicorn（自动适配）
-- **数据来源**：
-  - 机场数据：[mwgg/Airports](https://github.com/mwgg/Airports) (airports.json，约 29,000 个机场)
-  - 国家代码翻译：[IP2Location 国家代码数据库](https://www.ip2location.com/free/country-multilingual) (country_translations.csv，249 个国家/地区)
-  - METAR 实时数据：[isfpapi.flyisfp.com](https://isfpapi.flyisfp.com/api/metar)
-  - 时区翻译：内置 IANA 时区中文映射表 (timezone_translations.json)
+| 层次 | 技术 |
+|------|------|
+| **后端框架** | Python + Flask |
+| **前端框架** | Vue 3 + Vite |
+| **生产服务器** | Waitress (Windows) / Gunicorn (Linux)，自动适配 |
+| **API 文档** | Flasgger (Swagger UI) |
+| **数据下载** | requests，ETag 增量检测，仅在有更新时拉取 |
+| **截图分享** | html2canvas |
+| **容器化** | Docker + docker-compose，Nginx 反向代理 |
+
+## 数据来源
+| **数据类型** | **来源** |
+|------|------|
+| **机场数据** | [mwgg/Airports](https://github.com/mwgg/Airports) (airports.json，约 29,000 个机场)|
+|**国家代码翻译**|[IP2Location 国家代码数据库](https://www.ip2location.com/free/country-multilingual)(country_translations.csv，249 个国家/地区)|
+|**METAR 实时数据**|[isfpapi.flyisfp.com](https://isfpapi.flyisfp.com/api/metar)|
+|**时区翻译**|内置 IANA 时区中文映射表 (timezone_translations.json)|
 
 ## 安装与运行
 
@@ -47,6 +57,7 @@
 - Python 3.7+
 - Node.js 18+（仅 Vue 前端需要）
 - pip 包管理工具
+- Docker（可选）
 
 ### 安装依赖
 
@@ -65,14 +76,22 @@ npm install
 
 - 从 [mwgg/Airports](https://github.com/mwgg/Airports) 下载 `airports.json`，放在 `backend/data/` 目录下
 - 从 [IP2Location](https://www.ip2location.com/free/country-multilingual) 下载 `country_multilingual.csv`（重命名为 `country_translations.csv`），放在 `backend/data/` 目录下
+  **无需手动操作。** 首次启动时会自动下载所需数据文件：
+- `airports.json`（约29 MB）— 从 [mwgg/Airports](https://github.com/mwgg/Airports) 自动拉取
+- `country_translations.csv` — 需手动从 [IP2Location](https://www.ip2location.com/free/country-multilingual) 下载 `country_multilingual.csv`（重命名为 `country_translations.csv`），并截取所需语言片段，放在 `backend/data/` 目录下
+- `timezone_translations.json` — 项目自带，自动下载
 
-- `timezone_translations.json` — 项目自带，无需额外下载
+后续每次启动自动检测更新，有新版才下载。也可手动运行：
+
+```bash
+cd backend
+python download_data.py          # 检查并下载更新
+python download_data.py --pull   # 强制重新下载
+```
 
 ### 启动
 
-启动 Flask 后端（`localhost:5000`）+ Vue 开发服务器（`localhost:5173`），并打开浏览器。
-
-**手动启动（开发）：**
+**开发模式：**
 
 ```bash
 # 终端 1 — Flask 后端
@@ -84,25 +103,34 @@ cd frontend
 npm run dev
 ```
 
+访问 `http://localhost:5173`。
+
 **生产部署：**
 
-先构建前端静态文件：
-
 ```bash
+# 构建前端静态文件
 cd frontend
 npm run build
-```
 
-然后启动 WSGI 服务器（自动适配系统）：
-
-```bash
-cd backend
+# 启动 WSGI 服务器（自动适配系统）
+cd ../backend
 python wsgi.py
 ```
 
 - Windows 下自动使用 **Waitress**
-- Linux/MacOS 下自动使用 **Gunicorn**
-- Linux/MacOS 下也可直接调用：`gunicorn wsgi:app -b 0.0.0.0:5000 -w 4`
+- Linux/macOS 下自动使用 **Gunicorn**（也可直接调用 `gunicorn wsgi:app -b 0.0.0.0:5000 -w 4`）
+
+访问 `http://localhost:5000`。
+
+**Docker 部署：**
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+- 前端 Nginx 监听 `:80`，API 请求反向代理到后端
+- 数据目录 `backend/data/` 通过 volume 挂载，无需打入镜像
 
 ## 示例
 
@@ -111,6 +139,7 @@ python wsgi.py
 输入：`ZBAA`
 
 输出：
+
 ```
 机场名称：Beijing Capital International Airport
 ICAO代码：ZBAA
@@ -128,6 +157,7 @@ IATA代码：PEK
 输入：`ZSSS 251200Z 12005KT 9999 FEW020 18/12 Q1018 NOSIG`
 
 输出：
+
 ```
 报文类型：METAR（机场例行天气报告）
 机场代码：ZSSS
@@ -154,16 +184,18 @@ IATA代码：PEK
 │   │   ├── __init__.py            # 统一导出
 │   │   ├── ICAO_code_search.py    # ICAO 翻译器
 │   │   └── METAR_translate.py     # METAR 报文解析
-│   ├── data/                      # 静态数据（需下载）
+│   ├── data/                      # 静态数据（自动下载）
 │   │   ├── airports.json
-│   │   ├── country_translations.csv
+│   │   ├── country_translations.csv（非自动下载）
 │   │   └── timezone_translations.json
 │   ├── utils.py                   # 外部 API 调用
+│   ├── download_data.py           # 数据自动下载/更新
 │   ├── app.py                     # Flask 路由定义
 │   ├── wsgi.py                    # 生产 WSGI 入口（Waitress / Gunicorn）
 │   ├── run.py                     # 开发启动入口
-│   ├── requirements.txt
-│   └── .env.example
+│   ├── Dockerfile                 # 后端 Docker 镜像
+│   ├── .dockerignore
+│   └── requirements.txt
 │
 ├── frontend/                      # Vue 3 前端
 │   ├── public/                    # favicon 等静态资源
@@ -180,12 +212,14 @@ IATA代码：PEK
 │   │   ├── App.vue                # 根组件
 │   │   ├── main.js                # Vue 入口
 │   │   └── style.css              # 全局样式
+│   ├── dist/                      # 构建产物（npm run build）
 │   ├── index.html                 # Vite 入口 HTML
 │   ├── package.json
-│   └── vite.config.js             # API 代理配置
+│   ├── vite.config.js             # Vite 配置（含 API 代理）
+│   ├── Dockerfile                 # 前端多阶段构建（Node → Nginx）
+│   └── nginx.conf                 # Nginx 反向代理配置
 │
-├── static/dist/                   # Vue 构建产物（生产用）
-├── run_dev.py                     # 一键启动（Flask + Vue）
+├── docker-compose.yml             # Docker 编排
 ├── .gitignore
 └── README.md
 ```
@@ -193,18 +227,21 @@ IATA代码：PEK
 ## API 接口
 
 ### 前端专用 API
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api_web/icao` | ICAO 机场查询 |
-| POST | `/api_web/metar` | METAR 报文翻译 |
-| POST | `/api_web/fetch_metar` | 通过 ICAO 获取实时 METAR |
+
+| 方法   | 路径                         | 说明                 |
+| ---- | -------------------------- | ------------------ |
+| POST | `/api_web/icao`            | ICAO 机场查询          |
+| POST | `/api_web/metar`           | METAR 报文翻译         |
+| POST | `/api_web/fetch_metar`     | 通过 ICAO 获取实时 METAR |
+| GET  | `/api_web/suggest?q=<关键词>` | ICAO 代码联想搜索        |
 
 ### 通用 API
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/icao/<icao>?format=dict\|string` | 查询 ICAO 机场 |
-| POST | `/api/v1/metar/translate?format=dict\|string` | 翻译 METAR 报文 |
-| GET | `/api/v1/metar/fetch/<icao>?raw&translated&format` | 获取并翻译实时 METAR |
+
+| 方法   | 路径                                                 | 说明            |
+| ---- | -------------------------------------------------- | ------------- |
+| GET  | `/api/v1/icao/<icao>?format=dict\|string`          | 查询 ICAO 机场    |
+| POST | `/api/v1/metar/translate?format=dict\|string`      | 翻译 METAR 报文   |
+| GET  | `/api/v1/metar/fetch/<icao>?raw&translated&format` | 获取并翻译实时 METAR |
 
 ### Swagger 文档
 
@@ -214,10 +251,11 @@ http://localhost:5000/apidocs
 
 ## 注意事项
 
-1. **数据文件**：`airports.json` 和 `country_translations.csv` 需自行下载到 `backend/data/`
+1. **数据下载**：首次启动自动拉取 `airports.json`（约29 MB，需要网络连接）。后续每次启动检测更新，仅在新版时下载 。由于平台原因`country_translations.csv` 需自行下载到 `backend/data/`
 2. **网络依赖**：获取实时 METAR 需要网络连接
 3. **时区**：Python 3.9+ 使用内置 zoneinfo，3.9 以下需 `pip install pytz`
 4. **首次运行**：`frontend/node_modules/` 目录不存在时会自动执行 `npm install`
+5. **Docker**：构建前确保 `backend/data/` 中有数据文件，或启动后手动运行 `python download_data.py`
 
 ## 许可证
 
@@ -231,6 +269,6 @@ http://localhost:5000/apidocs
 - API 文档：[Flasgger](https://github.com/flasgger/flasgger)
 - 截图功能：[html2canvas](https://html2canvas.hertzen.com/)
 
----
+***
 
 Enjoy your flight! ✈️

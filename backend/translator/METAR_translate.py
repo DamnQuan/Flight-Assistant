@@ -1,11 +1,11 @@
 import re
 import os
-from .ICAO_code_search import ICAOTranslator
+from .icao_code_search import ICAOTranslator
 
 _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 translator = ICAOTranslator(data_dir=os.path.join(_BASE, 'data'))
 
-def parse_metar(metar, prediction = False):
+def parse_metar(metar, prediction=False):
     """
     解析 METAR 报文，返回可读的天气报告。
     """
@@ -105,7 +105,7 @@ def parse_metar(metar, prediction = False):
             result['auto'] = True
             result['auto_str'] = '此报文为自动报文'
         i += 1
- 
+
     # 风
     if i < len(parts):
         wind_part = parts[i]
@@ -156,14 +156,14 @@ def parse_metar(metar, prediction = False):
             i += 1
 
     # 跑道视程 (RVR)，格式: R24/1000FT 或 R24/1000V1500FT
-    def RVR_PorM_parse(code, rvr):
+    def rvr_p_or_m_parse(code, rvr):
         if code == "M":
-            if not rvr == "0050":
+            if rvr != "0050":
                 result['conflict'] = True
                 result['conflicting_content'].append(f"跑道{rwy}视程内容冲突（M表示视程小于50米，视程应写为0050，但当前视程写为{rvr}米）")
             rvr_str = "小于50"
         elif code == "P":
-            if not rvr == "2000":
+            if rvr != "2000":
                 result['conflict'] = True
                 result['conflicting_content'].append(f"跑道{rwy}视程内容冲突（P表示视程大于2000米，视程应写为2000，但当前视程写为{rvr}米）")
             rvr_str = "大于2000"
@@ -185,7 +185,7 @@ def parse_metar(metar, prediction = False):
             low_code = match.group(3)
             low = match.group(4)
             if low_code:
-                low_str = RVR_PorM_parse(low_code, low)
+                low_str = rvr_p_or_m_parse(low_code, low)
             else:
                 low_str = low.lstrip('0')
 
@@ -193,7 +193,7 @@ def parse_metar(metar, prediction = False):
             high = match.group(7)
             if match.group(5):
                 if high_code:
-                    high_str = RVR_PorM_parse(high_code, high)
+                    high_str = rvr_p_or_m_parse(high_code, high)
                 else:
                     high_str = high.lstrip('0')
             unit = match.group(8) or ''
@@ -206,18 +206,18 @@ def parse_metar(metar, prediction = False):
             break
 
     # 天气现象 (可能多个)
-    important_weather_map = [
+    important_weather_map = {
         "DZ", "BR", "PO", "RA", "FG", "SQ", "SN",
         "FU", "SG", "VA", "FC", "IC", "DU", "PL",
         "SA", "SS", "GR", "HZ", "DS", "GS"
-    ]
+    }
     while i < len(parts):
         weat = parts[i]
         # 检查是否包含天气代码（通常是由字母和+-组成）
-        if re.match(r'^[-+]?[A-Z]{2,}$', weat) and not weat == "NSC":
+        if re.match(r'^[-+]?[A-Z]{2,}$', weat) and weat != "NSC":
             result['weather'].append(translate_weather_code(weat))
             weather_check = weat[2:]
-            if any(keyword in weather_check for keyword in important_weather_map) and result['cavok'] == True:
+            if any(keyword in weather_check for keyword in important_weather_map) and result['cavok']:
                 result['conflict'] = True
                 result['conflicting_content'].append("报文内容冲突（CAVOK与天气现象冲突）")
             
@@ -226,8 +226,8 @@ def parse_metar(metar, prediction = False):
             break
 
     # 云层 (可能多个)
-    cloud_cover_map = {'SKC':'无云', 'FEW':'有1-2个量', 'SCT':'有3-4个量', 'BKN':'有5-6个量', 'OVC':'有7-8个量'}
-    cloud_type_map = {'':'云', '///':'云', 'TCU':'浓积云', 'CB':'积雨云'}
+    cloud_cover_map = {'SKC': '无云', 'FEW': '有1-2个量', 'SCT': '有3-4个量', 'BKN': '有5-6个量', 'OVC': '有7-8个量'}
+    cloud_type_map = {'': '云', '///': '云', 'TCU': '浓积云', 'CB': '积雨云'}
     while i < len(parts):
         cloud_type = ""
         cloud = parts[i]
@@ -241,7 +241,7 @@ def parse_metar(metar, prediction = False):
             height_ft = int(match.group(2)) * 100
             if re.match(r'^(SKC|FEW|SCT|BKN|OVC)([0-9]{3})(///|TCU|CB)$', cloud):
                 cloud_type = match.group(3)
-            if (int(match.group(2)) <= 49 or match.group(3) in ['TCU', 'CB']) and result['cavok'] == True:
+            if (int(match.group(2)) <= 49 or match.group(3) in ['TCU', 'CB']) and result['cavok']:
                 result['conflict'] = True
                 result['conflicting_content'].append("报文内容冲突（CAVOK与云层冲突）")
             result['clouds'].append(f"{height_ft}英尺{cloud_cover_map[cloud_cover]}{cloud_type_map[cloud_type]}")
@@ -300,12 +300,12 @@ def parse_metar(metar, prediction = False):
     while i < len(parts):
         weat = parts[i]
         # 检查是否包含天气代码（通常是由字母和+-组成）
-        if re.match(r'^RE[A-Z]{2,}$', weat) and not weat == "NSC":
+        if re.match(r'^RE[A-Z]{2,}$', weat) and weat != "NSC":
             result['near_weather'].append(translate_weather_code(weat))
             i += 1
         else:
             break
-    
+
     # 风切变
     if i < len(parts) and parts[i] == "WS":
         while i < len(parts):
@@ -347,10 +347,10 @@ def parse_metar(metar, prediction = False):
                 prediction_minute = int(BECMG[4:6])
                 prediction_tim = f"{BECMG_code}\n{translator.utc_to_local(result['airport_code'], day, prediction_hour, prediction_minute)}"
                 prediction_tapy += f"未来两小时内，{prediction_tim}，天气将逐渐变为:\n"
-                prediction_str = parse_metar(' '.join(parts[i + 2:]), prediction = True)
+                prediction_str = parse_metar(' '.join(parts[i + 2:]), prediction=True)
             elif  re.match(r'^(TEMPO)$', prediction):
                 prediction_tapy += "未来两小时将有临时天气\n"
-                prediction_str = parse_metar(' '.join(parts[i + 1:]), prediction = True)
+                prediction_str = parse_metar(' '.join(parts[i + 1:]), prediction=True)
             i = len(parts)
     result['prediction_tapy'] = prediction_tapy
     result['prediction'] = prediction_str
@@ -376,11 +376,11 @@ def translate_weather_code(code):
         'SG': '米雪', 'VA': '火山灰', 'FC': '龙卷云（陆龙卷/水龙卷）',
         'IC': '冰晶/冰针', 'DU': '浮尘', 'PL': '冰粒', 'SA': '沙',
         'SS': '沙暴', 'GR': '冰雹', 'HZ': '霾', 'DS': '尘暴', 'GS': '小冰雹或霰',
-        'FR':'霜', 'RI':'雾凇', 'PS':'积雪', 'VG':'雨淞', 'GA':'大风',
-        'WS':'风切变', 'TS': '雷暴', 'UP': '未知天气',
+        'FR': '霜', 'RI': '雾松', 'PS': '积雪', 'VG': '雨淞', 'GA': '大风',
+        'WS': '风切变', 'TS': '雷暴', 'UP': '未知天气',
     }
     translated = ''
-        
+
     if code == 'NSW':
         translated += '无显著天气'
         #NSW可能代表无天气
@@ -508,7 +508,7 @@ def translate_codes(parsed):
     if parsed['conflict']:
         result += f"\n⚠️警告：报文内容冲突（{'; '.join(parsed['conflicting_content'])}）\n"
     return result
-    
+
 
 def main():
     print("-" * 60)
@@ -529,7 +529,7 @@ def main():
         return
     while not metar:
         metar = input("\n请输入 正确的METAR 报文：").strip()
-    parsed = parse_metar(metar, prediction = False)
+    parsed = parse_metar(metar, prediction=False)
     print("\n翻译结果：")
     print(translate_codes(parsed))
 

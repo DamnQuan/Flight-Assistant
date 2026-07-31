@@ -3,12 +3,17 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flasgger import Swagger, swag_from
+
 from translator import ICAOTranslator, parse_metar, translate_codes
 from utils import fetch_metar
+from download_data import ensure_data
 
 app = Flask(__name__)
 CORS(app)
 swagger = Swagger(app)
+
+# 启动时自动检查并下载缺失的数据文件
+ensure_data()
 
 translator = ICAOTranslator()
 
@@ -29,7 +34,7 @@ def metar_translate():
     metar = data.get('metar', '').strip()
     if not metar:
         return jsonify({'error': '请输入 METAR 报文'}), 400
-    parsed = parse_metar(metar, prediction = False)
+    parsed = parse_metar(metar, prediction=False)
     result = translate_codes(parsed)
     return jsonify({'result': result})
 
@@ -92,7 +97,7 @@ def api_icao(icao):
 
 
 # ------------------ 生产环境托管前端静态文件 ------------------
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '..', 'static', 'dist')
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')
 
 
 @app.route('/')
@@ -128,7 +133,7 @@ def api_metar_translate():
     if not metar:
         return jsonify({'code': 400, 'message': 'METAR cannot be empty'}), 400
 
-    parsed = parse_metar(metar, prediction = False)
+    parsed = parse_metar(metar, prediction=False)
     if fmt == 'string':
         result = translate_codes(parsed)
         return jsonify({'code': 200, 'message': 'success', 'data': result})
@@ -164,7 +169,7 @@ def api_metar_fetch(icao):
     if raw_flag:
         result['raw_metar'] = metar_str
     if translated_flag:
-        parsed = parse_metar(metar_str, prediction = False)
+        parsed = parse_metar(metar_str, prediction=False)
         if fmt == 'string':
             result['translated'] = translate_codes(parsed)
         else:
